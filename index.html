@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS | Cloud Sync AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden selection:bg-cyan-500 selection:text-white">
+
+    <!-- Sidebar Navigation -->
+    <nav class="w-20 md:w-64 bg-slate-900 border-r border-slate-700 flex flex-col justify-between hidden md:flex">
+        <div>
+            <div class="p-6 flex items-center gap-3 text-cyan-400">
+                <i class="fa-solid fa-brain text-2xl"></i>
+                <span class="text-xl font-bold tracking-wider hidden md:block neon-text">NEXUS</span>
+            </div>
+            
+            <div class="mt-8 px-4 space-y-2">
+                <button onclick="switchTab('dashboard')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl bg-slate-800 text-cyan-400 hover:bg-slate-700 transition-all">
+                    <i class="fa-solid fa-grip"></i>
+                    <span class="hidden md:block">Dashboard</span>
+                </button>
+                <button onclick="switchTab('notes')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-cyan-400 transition-all">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span class="hidden md:block">Study Notes</span>
+                </button>
+                <button onclick="switchTab('comms')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-green-400 transition-all">
+                    <i class="fa-brands fa-whatsapp"></i>
+                    <span class="hidden md:block">Comms & Email</span>
+                </button>
+                <button onclick="switchTab('calls')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-all">
+                    <i class="fa-solid fa-phone"></i>
+                    <span class="hidden md:block">Call Logs</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center gap-3 text-slate-500 text-sm">
+                <div id="connectionStatus" class="w-2 h-2 rounded-full bg-red-500"></div>
+                <span class="hidden md:block" id="statusText">Connecting...</span>
+            </div>
+            <div class="hidden md:block text-xs text-slate-600 mt-1 truncate" id="userIdDisplay"></div>
+        </div>
+    </nav>
+
+    <!-- Mobile Nav (Bottom) -->
+    <nav class="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-700 flex justify-around p-4 z-50">
+        <button onclick="switchTab('dashboard')" class="text-cyan-400"><i class="fa-solid fa-grip text-xl"></i></button>
+        <button onclick="switchTab('notes')" class="text-slate-400"><i class="fa-solid fa-book-open text-xl"></i></button>
+        <button onclick="switchTab('comms')" class="text-slate-400"><i class="fa-brands fa-whatsapp text-xl"></i></button>
+        <button onclick="switchTab('calls')" class="text-slate-400"><i class="fa-solid fa-phone text-xl"></i></button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        <!-- Top Bar: AI Input -->
+        <header class="h-20 border-b border-slate-700 bg-slate-900/50 backdrop-blur-md flex items-center px-6 md:px-10 justify-between z-10">
+            <div class="flex-1 max-w-3xl relative">
+                <input type="text" id="aiInput" 
+                    placeholder="Ask NEXUS... (e.g., 'Whatsapp Mom', 'Note: History exam on Monday', 'Search SpaceX')" 
+                    class="w-full bg-slate-800/50 border border-slate-600 rounded-full py-3 px-6 pl-12 focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500 transition-all shadow-lg"
+                    onkeypress="handleAIInput(event)">
+                <i class="fa-solid fa-microchip absolute left-4 top-1/2 transform -translate-y-1/2 text-cyan-500"></i>
+            </div>
+            <div class="ml-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-user text-white"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Panels -->
+        <div id="contentArea" class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative">
+            
+            <!-- VIEW: DASHBOARD -->
+            <div id="dashboard" class="view-panel space-y-6 slide-in">
+                <!-- Welcome Section -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white mb-2">Command Center</h1>
+                        <p id="dateDisplay" class="text-slate-400 mono"></p>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-panel p-6 rounded-2xl border-l-4 border-cyan-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-400 text-sm">Active Reminders</p>
+                                <h3 class="text-3xl font-bold text-white mt-1" id="reminderCount">0</h3>
+                            </div>
+                            <div class="bg-cyan-500/10 p-3 rounded-lg text-cyan-400">
+                                <i class="fa-solid fa-bell"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl border-l-4 border-purple-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-400 text-sm">Study Notes</p>
+                                <h3 class="text-3xl font-bold text-white mt-1" id="noteCount">0</h3>
+                            </div>
+                            <div class="bg-purple-500/10 p-3 rounded-lg text-purple-400">
+                                <i class="fa-solid fa-sticky-note"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl border-l-4 border-green-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-400 text-sm">Quick Browser</p>
+                                <button onclick="window.open('https://google.com', '_blank')" class="mt-2 text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded">Open Google</button>
+                            </div>
+                            <div class="bg-green-500/10 p-3 rounded-lg text-green-400">
+                                <i class="fa-brands fa-google"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reminders List -->
+                <div class="glass-panel rounded-2xl p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold">Reminders & Tasks</h2>
+                        <button onclick="addReminderPrompt()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                            <i class="fa-solid fa-plus mr-2"></i>Add Task
+                        </button>
+                    </div>
+                    <ul id="reminderList" class="space-y-3">
+                        <li class="text-center text-slate-500 py-4">Loading cloud data...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- VIEW: NOTES -->
+            <div id="notes" class="view-panel hidden slide-in h-full flex flex-col">
+                <h2 class="text-2xl font-bold mb-4">Study Notes</h2>
+                <div class="flex gap-4 h-full">
+                    <!-- Note List Sidebar -->
+                    <div class="w-1/3 glass-panel rounded-xl overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-700 bg-slate-800/50">
+                            <button onclick="createNewNote()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-2 rounded-lg text-sm">
+                                <i class="fa-solid fa-plus mr-2"></i>New Note
+                            </button>
+                        </div>
+                        <div id="notesList" class="overflow-y-auto flex-1 p-2 space-y-2">
+                            <!-- JS Generated -->
+                        </div>
+                    </div>
+                    <!-- Editor -->
+                    <div class="w-2/3 glass-panel rounded-xl flex flex-col overflow-hidden">
+                        <input type="text" id="noteTitle" placeholder="Note Title..." class="bg-transparent text-xl font-bold p-6 border-b border-slate-700 focus:outline-none text-white">
+                        <textarea id="noteBody" placeholder="Start typing your study notes here..." class="flex-1 bg-transparent p-6 resize-none focus:outline-none text-slate-300 leading-relaxed font-light"></textarea>
+                        <div class="p-4 border-t border-slate-700 bg-slate-800/30 flex justify-end">
+                            <button onclick="saveCurrentNote()" class="text-cyan-400 hover:text-cyan-300 text-sm font-semibold">
+                                <i class="fa-solid fa-save mr-2"></i>Save Cloud Note
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: COMMS -->
+            <div id="comms" class="view-panel hidden slide-in max-w-4xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6">Communication Hub</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- WhatsApp -->
+                    <div class="glass-panel p-6 rounded-2xl border-t-4 border-green-500">
+                        <div class="flex items-center gap-3 mb-6">
+                            <i class="fa-brands fa-whatsapp text-3xl text-green-500"></i>
+                            <h3 class="text-xl font-semibold">WhatsApp Direct</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-xs text-slate-400 uppercase font-bold">Phone Number</label>
+                                <input type="tel" id="waNumber" placeholder="e.g. 15551234567" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 mt-1 text-white focus:border-green-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 uppercase font-bold">Message</label>
+                                <textarea id="waMessage" rows="3" placeholder="Hello..." class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 mt-1 text-white focus:border-green-500 focus:outline-none"></textarea>
+                            </div>
+                            <button onclick="sendWhatsapp()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2">
+                                <i class="fa-paper-plane"></i> Open WhatsApp
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Email -->
+                    <div class="glass-panel p-6 rounded-2xl border-t-4 border-blue-500">
+                        <div class="flex items-center gap-3 mb-6">
+                            <i class="fa-solid fa-envelope text-3xl text-blue-500"></i>
+                            <h3 class="text-xl font-semibold">Email Drafter</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-xs text-slate-400 uppercase font-bold">To</label>
+                                <input type="email" id="emailTo" placeholder="recipient@example.com" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 mt-1 text-white focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 uppercase font-bold">Subject</label>
+                                <input type="text" id="emailSubject" placeholder="Meeting..." class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 mt-1 text-white focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 uppercase font-bold">Body</label>
+                                <textarea id="emailBody" rows="3" placeholder="Dear..." class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 mt-1 text-white focus:border-blue-500 focus:outline-none"></textarea>
+                            </div>
+                            <button onclick="sendEmail()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2">
+                                <i class="fa-paper-plane"></i> Open Mail App
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: CALL LOGS -->
+            <div id="calls" class="view-panel hidden slide-in">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">Call Log Tracker</h2>
+                        <p class="text-sm text-slate-400">Cloud-synced call records</p>
+                    </div>
+                    <button onclick="toggleCallForm()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg">
+                        <i class="fa-solid fa-phone mr-2"></i>Log Call
+                    </button>
+                </div>
+
+                <!-- Call Entry Form -->
+                <div id="callForm" class="hidden mb-8 glass-panel p-6 rounded-xl border border-blue-500/30">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <input type="text" id="callName" placeholder="Contact Name" class="bg-slate-800 border border-slate-600 rounded p-3 text-white">
+                        <input type="text" id="callNumber" placeholder="Number (Optional)" class="bg-slate-800 border border-slate-600 rounded p-3 text-white">
+                        <select id="callType" class="bg-slate-800 border border-slate-600 rounded p-3 text-white">
+                            <option value="Incoming">Incoming</option>
+                            <option value="Outgoing">Outgoing</option>
+                            <option value="Missed">Missed</option>
+                        </select>
+                    </div>
+                    <textarea id="callNotes" placeholder="Summary of conversation..." class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-white h-20 mb-4"></textarea>
+                    <div class="flex justify-end gap-3">
+                        <button onclick="toggleCallForm()" class="text-slate-400 hover:text-white px-4 py-2">Cancel</button>
+                        <button onclick="saveCallLog()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-500">Save Record</button>
+                    </div>
+                </div>
+
+                <!-- Call History Table -->
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-800/50 text-slate-400 text-sm uppercase">
+                                <th class="p-4">Type</th>
+                                <th class="p-4">Contact</th>
+                                <th class="p-4">Date/Time</th>
+                                <th class="p-4">Notes</th>
+                                <th class="p-4">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="callTableBody" class="text-slate-300 text-sm divide-y divide-slate-700">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                    <div id="emptyCalls" class="p-8 text-center text-slate-500">
+                        Loading call logs...
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-cyan-600 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 transition-transform duration-300 z-50">
+        Action Completed
+    </div>
+
+    <script type="module">
+        // Import Firebase Functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- FIREBASE CONFIGURATION ---
+        // NOTE: In a real-world scenario outside this chat, you must replace this with your own Firebase Config from the Firebase Console.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : null; // Fallback or Error if running locally without config
+
+        if(!firebaseConfig) {
+            console.error("Firebase Config missing. Using Local Mock Mode for UI.");
+            // Ideally prompt user to add keys
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'nexus-ai-default';
+
+        // --- APP STATE ---
+        let currentUser = null;
+        let reminders = [];
+        let notes = [];
+        let callLogs = [];
+        let activeNoteId = null;
+
+        // --- INIT AUTH & LISTENERS ---
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Error:", error);
+                document.getElementById('statusText').innerText = "Auth Error";
+            }
+        };
+
+        // Auth Observer
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('connectionStatus').classList.replace('bg-red-500', 'bg-green-500');
+                document.getElementById('statusText').innerText = "Cloud Synced";
+                document.getElementById('userIdDisplay').innerText = `ID: ${user.uid.substring(0,8)}...`;
+                
+                // Initialize Listeners immediately after auth
+                setupRealtimeListeners(user);
+            } else {
+                document.getElementById('connectionStatus').classList.replace('bg-green-500', 'bg-red-500');
+                document.getElementById('statusText').innerText = "Offline";
+            }
+        });
+
+        // Start Auth
+        initAuth();
+
+        // --- FIRESTORE LISTENERS ---
+        function setupRealtimeListeners(user) {
+            const userId = user.uid;
+            const basePath = `artifacts/${appId}/users/${userId}`;
+
+            // 1. REMINDERS LISTENER
+            onSnapshot(collection(db, basePath, 'reminders'), (snapshot) => {
+                reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                    .sort((a, b) => b.createdAt - a.createdAt);
+                renderReminders();
+            }, (err) => console.error("Reminders Error", err));
+
+            // 2. NOTES LISTENER
+            onSnapshot(collection(db, basePath, 'notes'), (snapshot) => {
+                notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                    .sort((a, b) => b.createdAt - a.createdAt);
+                renderNotesList();
+                // If we have an active note, refresh its content in case it changed elsewhere
+                if(activeNoteId) loadNote(activeNoteId);
+            }, (err) => console.error("Notes Error", err));
+
+            // 3. CALL LOGS LISTENER
+            onSnapshot(collection(db, basePath, 'call_logs'), (snapshot) => {
+                callLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                    .sort((a, b) => b.createdAt - a.createdAt);
+                renderCallLogs();
+            }, (err) => console.error("Call Logs Error", err));
+        }
+
+        // --- GLOBAL UI HELPERS ---
+        // Expose functions to window because module scope is isolated
+        window.switchTab = (tabId) => {
+            document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => {
+                if(btn.onclick.toString().includes(tabId)) {
+                    btn.classList.add('bg-slate-800', 'text-cyan-400');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-slate-800', 'text-cyan-400');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+        };
+
+        window.handleAIInput = (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value.trim();
+                if (!query) return;
+                processCommand(query);
+                e.target.value = '';
+            }
+        };
+
+        function processCommand(cmd) {
+            const lowerCmd = cmd.toLowerCase();
+
+            if (lowerCmd.includes('whatsapp') || lowerCmd.includes('msg')) {
+                window.switchTab('comms');
+                showToast('AI: Opening Communication Hub');
+                return;
+            }
+            if (lowerCmd.includes('email') || lowerCmd.includes('mail')) {
+                window.switchTab('comms');
+                showToast('AI: Opening Email Drafter');
+                return;
+            }
+            if (lowerCmd.includes('remind') || lowerCmd.includes('task')) {
+                const text = cmd.replace(/remind me to|remind|task/gi, '').trim();
+                window.addReminder(text);
+                window.switchTab('dashboard');
+                showToast(`AI: Synced reminder "${text}"`);
+                return;
+            }
+            if (lowerCmd.startsWith('note:') || lowerCmd.includes('study note')) {
+                const text = cmd.replace(/note:|study note/gi, '').trim();
+                window.createNewNote(text.substring(0, 15) + "...", text);
+                window.switchTab('notes');
+                showToast('AI: Created cloud note');
+                return;
+            }
+            if (lowerCmd.includes('call log') || lowerCmd.includes('log call')) {
+                window.switchTab('calls');
+                window.toggleCallForm();
+                return;
+            }
+            if (lowerCmd.includes('search') || lowerCmd.includes('google')) {
+                const query = cmd.replace(/search for|search|google/gi, '').trim();
+                window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+                return;
+            }
+            showToast("AI: Command not recognized.");
+        }
+
+        // --- REMINDERS LOGIC ---
+        window.addReminderPrompt = () => {
+            const text = prompt("Enter task details:");
+            if (text) window.addReminder(text);
+        };
+
+        window.addReminder = async (text) => {
+            if(!currentUser) return;
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/users/${currentUser.uid}/reminders`), {
+                    text: text,
+                    done: false,
+                    createdAt: Date.now()
+                });
+            } catch(e) { console.error(e); }
+        };
+
+        window.toggleReminder = async (id) => {
+            if(!currentUser) return;
+            const reminder = reminders.find(r => r.id === id);
+            if(reminder) {
+                const ref = doc(db, `artifacts/${appId}/users/${currentUser.uid}/reminders`, id);
+                await updateDoc(ref, { done: !reminder.done });
+            }
+        };
+
+        window.deleteReminder = async (id) => {
+            if(!currentUser) return;
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/reminders`, id));
+        };
+
+        function renderReminders() {
+            const list = document.getElementById('reminderList');
+            list.innerHTML = '';
+            
+            if (reminders.length === 0) {
+                list.innerHTML = '<li class="text-center text-slate-500 py-4">No active tasks in cloud.</li>';
+            } else {
+                reminders.forEach(r => {
+                    const li = document.createElement('li');
+                    li.className = `flex items-center justify-between p-3 rounded-lg ${r.done ? 'bg-slate-800/30' : 'bg-slate-700/50'}`;
+                    li.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <button onclick="toggleReminder('${r.id}')" class="w-5 h-5 rounded border ${r.done ? 'bg-cyan-500 border-cyan-500' : 'border-slate-500'} flex items-center justify-center">
+                                ${r.done ? '<i class="fa-solid fa-check text-xs text-white"></i>' : ''}
+                            </button>
+                            <span class="${r.done ? 'line-through text-slate-500' : 'text-slate-200'}">${r.text}</span>
+                        </div>
+                        <button onclick="deleteReminder('${r.id}')" class="text-slate-500 hover:text-red-400"><i class="fa-solid fa-trash"></i></button>
+                    `;
+                    list.appendChild(li);
+                });
+            }
+            updateStats();
+        }
+
+        // --- NOTES LOGIC ---
+        window.createNewNote = async (title = "New Note", body = "") => {
+            if(!currentUser) return;
+            const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${currentUser.uid}/notes`), {
+                title, body, createdAt: Date.now()
+            });
+            activeNoteId = docRef.id;
+        };
+
+        window.saveCurrentNote = async () => {
+            if (!activeNoteId || !currentUser) return;
+            const title = document.getElementById('noteTitle').value;
+            const body = document.getElementById('noteBody').value;
+            
+            const ref = doc(db, `artifacts/${appId}/users/${currentUser.uid}/notes`, activeNoteId);
+            await updateDoc(ref, { title, body });
+            showToast("Note Saved to Cloud");
+        };
+
+        function renderNotesList() {
+            const list = document.getElementById('notesList');
+            list.innerHTML = '';
+            notes.forEach(n => {
+                const div = document.createElement('div');
+                div.className = `p-3 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors ${activeNoteId === n.id ? 'bg-slate-700 border-l-2 border-cyan-500' : ''}`;
+                div.onclick = () => loadNote(n.id);
+                div.innerHTML = `
+                    <h4 class="font-bold text-slate-200 text-sm truncate">${n.title}</h4>
+                    <p class="text-xs text-slate-500 truncate">${n.body}</p>
+                `;
+                list.appendChild(div);
+            });
+            updateStats();
+        }
+
+        function loadNote(id) {
+            activeNoteId = id;
+            const note = notes.find(n => n.id === id);
+            if (note) {
+                // Check if element is active (to avoid overwriting while typing if streaming)
+                const titleEl = document.getElementById('noteTitle');
+                const bodyEl = document.getElementById('noteBody');
+                
+                // Only update value if different to prevent cursor jumps
+                if(titleEl.value !== note.title) titleEl.value = note.title;
+                if(bodyEl.value !== note.body) bodyEl.value = note.body;
+                
+                renderNotesList(); // re-render to show active state
+            }
+        }
+
+        // --- CALLS LOGIC ---
+        window.toggleCallForm = () => document.getElementById('callForm').classList.toggle('hidden');
+
+        window.saveCallLog = async () => {
+            if(!currentUser) return;
+            const name = document.getElementById('callName').value;
+            if(!name) return alert("Contact Name is required");
+
+            await addDoc(collection(db, `artifacts/${appId}/users/${currentUser.uid}/call_logs`), {
+                name: name,
+                number: document.getElementById('callNumber').value,
+                type: document.getElementById('callType').value,
+                notes: document.getElementById('callNotes').value,
+                createdAt: Date.now(),
+                dateString: new Date().toLocaleString()
+            });
+
+            window.toggleCallForm();
+            document.getElementById('callName').value = '';
+            document.getElementById('callNumber').value = '';
+            document.getElementById('callNotes').value = '';
+        };
+
+        window.deleteCallLog = async (id) => {
+            if(!currentUser) return;
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUser.uid}/call_logs`, id));
+        };
+
+        function renderCallLogs() {
+            const tbody = document.getElementById('callTableBody');
+            const empty = document.getElementById('emptyCalls');
+            tbody.innerHTML = '';
+
+            if (callLogs.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            callLogs.forEach(log => {
+                const tr = document.createElement('tr');
+                let iconColor = 'text-slate-400';
+                let icon = 'fa-phone';
+                if(log.type === 'Missed') { iconColor = 'text-red-500'; icon = 'fa-phone-slash'; }
+                if(log.type === 'Incoming') { iconColor = 'text-green-500'; icon = 'fa-phone-flip transform rotate-180'; }
+                if(log.type === 'Outgoing') { iconColor = 'text-blue-500'; icon = 'fa-phone-flip'; }
+
+                tr.innerHTML = `
+                    <td class="p-4"><i class="fa-solid ${icon} ${iconColor} mr-2"></i> ${log.type}</td>
+                    <td class="p-4 font-bold text-white">${log.name} <span class="text-slate-500 font-normal text-xs ml-1">${log.number}</span></td>
+                    <td class="p-4 text-xs">${log.dateString || 'Just now'}</td>
+                    <td class="p-4 text-slate-400 italic truncate max-w-xs">${log.notes}</td>
+                    <td class="p-4"><button onclick="deleteCallLog('${log.id}')" class="text-slate-500 hover:text-red-500"><i class="fa-solid fa-trash"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- COMMS ---
+        window.sendWhatsapp = () => {
+            const number = document.getElementById('waNumber').value.replace(/\D/g, ''); 
+            const text = encodeURIComponent(document.getElementById('waMessage').value);
+            if (!number) return alert("Please enter a phone number.");
+            window.open(`https://wa.me/${number}?text=${text}`, '_blank');
+        };
+
+        window.sendEmail = () => {
+            const to = document.getElementById('emailTo').value;
+            const subject = encodeURIComponent(document.getElementById('emailSubject').value);
+            const body = encodeURIComponent(document.getElementById('emailBody').value);
+            window.open(`mailto:${to}?subject=${subject}&body=${body}`);
+        };
+
+        // --- UTILS ---
+        function updateStats() {
+            document.getElementById('reminderCount').innerText = reminders.filter(r => !r.done).length;
+            document.getElementById('noteCount').innerText = notes.length;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.remove('translate-y-20');
+            setTimeout(() => { toast.classList.add('translate-y-20'); }, 3000);
+        }
+
+        // Basic Time Update
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            document.getElementById('dateDisplay').textContent = now.toLocaleDateString('en-US', options);
+        }
+        setInterval(updateDate, 60000);
+        updateDate();
+
+    </script>
+</body>
+</html>
