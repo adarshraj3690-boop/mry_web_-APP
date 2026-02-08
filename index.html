@@ -440,7 +440,7 @@ const SpeechRecognition =
 
 const recognition = new SpeechRecognition();
 recognition.continuous = true;
-recognition.lang = "en-US";
+recognition.lang = "en-IN";
 
 recognition.onresult = (event) => {
   const text =
@@ -476,9 +476,14 @@ function morningRoutine() {
 }
 
 window.addEventListener("load", morningRoutine);
+function startJarvisVoice() {
+  recognition.start();
+  showToast("Jarvis Listening 🎤");
+}
 
     </script>
 </body>
 </html>
+
 
 
