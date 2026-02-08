@@ -3,148 +3,143 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXUS | Personal AI</title>
-
+<title>NEXUS – Final Jarvis System</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
-<style>
-body{font-family:Inter, sans-serif;background:#0f172a;color:#e2e8f0}
-.glass{background:rgba(30,41,59,.7);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
-</style>
 </head>
 
-<body class="h-screen flex overflow-hidden">
+<body class="bg-slate-900 text-white h-screen flex flex-col">
 
-<!-- SIDEBAR -->
-<nav class="w-64 bg-slate-900 border-r border-slate-700 flex flex-col">
+<!-- ================= HEADER ================= -->
+<div class="p-4 bg-slate-950 flex gap-3">
 
-<div class="p-6 text-cyan-400 text-xl font-bold">NEXUS</div>
+<input id="aiInput" placeholder="Ask Jarvis..."
+ class="flex-1 bg-slate-800 px-4 py-2 rounded">
 
-<div class="px-4 space-y-2">
-<button onclick="switchTab('dashboard')" class="w-full text-left px-4 py-3 bg-slate-800 rounded">Dashboard</button>
-<button onclick="switchTab('notes')" class="w-full text-left px-4 py-3 hover:bg-slate-800 rounded">Study Notes</button>
-<button onclick="switchTab('comms')" class="w-full text-left px-4 py-3 hover:bg-slate-800 rounded">Comms</button>
-<button onclick="switchTab('calls')" class="w-full text-left px-4 py-3 hover:bg-slate-800 rounded">Call Logs</button>
-</div>
-
-<div class="mt-auto p-4 text-xs text-orange-400">Offline Mode</div>
-</nav>
-
-<!-- MAIN -->
-<main class="flex-1 flex flex-col">
-
-<!-- HEADER -->
-<header class="h-20 border-b border-slate-700 flex items-center px-6">
-
-<div class="flex-1 max-w-3xl relative flex items-center gap-2">
-
-<input type="text"
-id="aiInput"
-placeholder="Ask NEXUS..."
-class="w-full bg-slate-800 border border-slate-600 rounded-full py-3 px-6 pl-12">
-
-<i class="fa-solid fa-microchip absolute left-4 text-cyan-500"></i>
-
-<!-- MIC BUTTON -->
 <button onclick="startJarvisVoice()"
-class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-full">
-🎤
-</button>
+ class="bg-cyan-600 px-4 py-2 rounded">🎤</button>
 
 </div>
 
-</header>
+<!-- ================= DASHBOARD ================= -->
+<div class="flex-1 p-6 overflow-y-auto">
 
-<!-- CONTENT -->
-<div class="flex-1 p-8 overflow-y-auto">
+<h1 class="text-2xl mb-4">Command Center</h1>
 
-<!-- DASHBOARD -->
-<div id="dashboard" class="view">
-<h1 class="text-3xl font-bold mb-6">Command Center</h1>
+<button onclick="addReminder()"
+ class="bg-cyan-600 px-4 py-2 rounded">Add Reminder</button>
 
-<div class="grid grid-cols-3 gap-6">
-<div class="glass p-6 rounded">
-<h3 id="reminderCount" class="text-3xl">0</h3>
-<p>Reminders</p>
-</div>
-
-<div class="glass p-6 rounded">
-<h3 id="noteCount" class="text-3xl">0</h3>
-<p>Notes</p>
-</div>
-
-<div class="glass p-6 rounded">
-<button onclick="window.open('https://google.com')"
-class="bg-green-600 px-4 py-2 rounded">Open Google</button>
-</div>
-</div>
-</div>
-
-<!-- NOTES -->
-<div id="notes" class="view hidden">
-<h1 class="text-2xl mb-4">Notes</h1>
-<textarea class="w-full h-64 bg-slate-800 p-4"></textarea>
-</div>
-
-<!-- COMMS -->
-<div id="comms" class="view hidden">
-<h1 class="text-2xl mb-4">WhatsApp</h1>
-<input id="waNumber" placeholder="Number" class="bg-slate-800 p-2 w-full mb-2">
-<textarea id="waMessage" placeholder="Message" class="bg-slate-800 p-2 w-full mb-2"></textarea>
-<button onclick="sendWhatsapp()" class="bg-green-600 px-4 py-2 rounded">Send</button>
-</div>
-
-<!-- CALLS -->
-<div id="calls" class="view hidden">
-<h1 class="text-2xl">Call Logs</h1>
-</div>
+<ul id="reminderList" class="mt-4"></ul>
 
 </div>
-</main>
 
-<!-- VOICE SCRIPT -->
 <script>
 
-function switchTab(id){
-document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
-document.getElementById(id).classList.remove('hidden');
+/* ================= REMINDERS ================= */
+
+let reminders=[];
+
+function addReminder(textInput){
+ const text=textInput || prompt("Task?");
+ if(!text) return;
+
+ reminders.push(text);
+ renderReminders();
+ jarvisSpeak("Reminder added");
 }
 
-// ================= VOICE JARVIS =================
+function renderReminders(){
+ document.getElementById("reminderList").innerHTML=
+ reminders.map(r=>`<li>• ${r}</li>`).join("");
+}
 
-const SpeechRecognition =
-window.SpeechRecognition || window.webkitSpeechRecognition;
+/* ================= WHATSAPP ================= */
 
-const recognition = new SpeechRecognition();
-recognition.continuous = true;
-recognition.lang = "en-US";
+function sendWhatsapp(number,message){
+ const url=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+ window.open(url,"_blank");
+ jarvisSpeak("Opening WhatsApp");
+}
 
-recognition.onresult = (event)=>{
-const text = event.results[event.results.length-1][0].transcript.toLowerCase();
+/* ================= AI CHAT BRAIN ================= */
 
-if(text.includes("open notes")) switchTab('notes');
-else if(text.includes("open dashboard")) switchTab('dashboard');
-else if(text.includes("open whatsapp")) switchTab('comms');
-else if(text.includes("open calls")) switchTab('calls');
-else alert("Command not recognized");
+async function askAI(question){
+
+ // ⚠️ Replace with your OpenAI / API backend later
+
+ jarvisSpeak("AI response feature connected. Add API to enable brain.");
+ console.log("AI Question:",question);
+}
+
+/* ================= VOICE + WAKE WORD ================= */
+
+const SpeechRecognition=
+window.SpeechRecognition||window.webkitSpeechRecognition;
+
+const recognition=new SpeechRecognition();
+recognition.continuous=true;
+recognition.lang="en-US";
+
+let jarvisActive=false;
+
+recognition.onresult=(event)=>{
+
+ const text=
+ event.results[event.results.length-1][0].transcript.toLowerCase();
+
+ console.log("Heard:",text);
+
+ // WAKE WORD
+ if(text.includes("hey jarvis")){
+  jarvisActive=true;
+  jarvisSpeak("Yes, I am listening");
+  return;
+ }
+
+ if(!jarvisActive) return;
+
+ // COMMANDS
+
+ if(text.includes("add reminder")){
+  addReminder("Voice reminder added");
+ }
+
+ else if(text.includes("send whatsapp")){
+  sendWhatsapp("91XXXXXXXXXX","Hello from Jarvis");
+ }
+
+ else if(text.includes("study mode")){
+  document.body.style.background="#020617";
+  jarvisSpeak("Study mode activated");
+ }
+
+ else if(text.includes("ask ai")){
+  askAI(text);
+ }
+
+ else{
+  jarvisSpeak("Command not recognized");
+ }
+
+ jarvisActive=false;
 };
 
+/* ================= START MIC ================= */
+
 function startJarvisVoice(){
-try{
-recognition.start();
-alert("Jarvis Listening 🎤");
-}catch(e){
-alert("Mic already running or blocked");
-}
+ try{
+  recognition.start();
+  jarvisSpeak("Wake word activated");
+ }catch{
+  alert("Mic already running");
+ }
 }
 
-// ================= WHATSAPP =================
+/* ================= JARVIS SPEAK ================= */
 
-function sendWhatsapp(){
-const n=document.getElementById('waNumber').value;
-const m=encodeURIComponent(document.getElementById('waMessage').value);
-window.open(`https://wa.me/${n}?text=${m}`);
+function jarvisSpeak(message){
+ const speech=new SpeechSynthesisUtterance(message);
+ speech.lang="en-US";
+ window.speechSynthesis.speak(speech);
 }
 
 </script>
