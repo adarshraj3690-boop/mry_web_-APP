@@ -428,6 +428,51 @@
             t.classList.remove('translate-y-20');
             setTimeout(() => t.classList.add('translate-y-20'), 2000);
         }
+        // ================= VOICE JARVIS =================
+
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const recognition = new SpeechRecognition();
+recognition.continuous = true;
+recognition.lang = "en-US";
+
+recognition.onresult = (event) => {
+  const text =
+    event.results[event.results.length - 1][0].transcript.toLowerCase();
+
+  console.log("Jarvis heard:", text);
+
+  if (text.includes("open notes")) switchTab("notes");
+  else if (text.includes("open reminders")) switchTab("dashboard");
+  else if (text.includes("add reminder")) addReminderPrompt();
+  else if (text.includes("open calls")) switchTab("calls");
+  else if (text.includes("open whatsapp")) switchTab("comms");
+  else if (text.includes("study mode")) startStudyMode();
+  else alert("Command not recognized");
+};
+
+function startJarvisVoice() {
+  recognition.start();
+  showToast("Jarvis Listening 🎤");
+}
+
+// ================= AUTOMATION =================
+
+function startStudyMode() {
+  document.body.style.background = "#020617";
+  showToast("Study Mode Activated 📚");
+}
+
+function morningRoutine() {
+  if (reminders.length > 0) {
+    showToast("You have " + reminders.length + " tasks today");
+  }
+}
+
+window.addEventListener("load", morningRoutine);
+
     </script>
 </body>
 </html>
+
